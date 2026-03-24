@@ -6,7 +6,6 @@ Multi-source image intelligence pipeline that extracts geographic features from 
 **Stack:** Python · Claude Sonnet · DuckDB · Polars · GeoPandas · Streamlit
 
 ---
-```
 
 ### Required API keys (.env)
 
