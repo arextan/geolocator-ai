@@ -208,6 +208,7 @@ __marimo__/
 
 # Project specific
 CLAUDE.md
+CLAUDE_phase2.md
 extraction_prompt.py
 geoguessr.db
 data/images/

@@ -98,38 +98,48 @@ def _parse_response(raw: str) -> dict:
         return {}
 
 
-def extract(image_path: str) -> tuple[dict, str]:
-    """Send image to Claude Sonnet and return (parsed_features, raw_response).
+def extract(image_paths: list[str]) -> tuple[dict, str]:
+    """Send one or more images to Claude Sonnet and return (parsed_features, raw_response).
+
+    When multiple images are provided (e.g. 4 headings of the same location),
+    all are sent in a single API call so Claude can synthesise across views.
 
     On any failure returns (_EMPTY_RESULT, raw_response_or_empty_string).
     Never raises.
     """
     raw_response = ""
     try:
-        b64_data, media_type = _load_image_b64(image_path)
+        # Build image content blocks
+        content: list[dict] = []
+        for path in image_paths:
+            b64_data, media_type = _load_image_b64(path)
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": b64_data,
+                },
+            })
+
+        # Prepend a brief multi-view context when more than one image is sent.
+        # The EXTRACTION_PROMPT itself is unchanged (tested, do not modify).
+        if len(image_paths) > 1:
+            preamble = (
+                f"You are seeing {len(image_paths)} Street View images of the same "
+                f"location taken at different headings (0°, 90°, 180°, 270°). "
+                f"Synthesise features from all views and return one JSON object.\n\n"
+            )
+            prompt_text = preamble + EXTRACTION_PROMPT
+        else:
+            prompt_text = EXTRACTION_PROMPT
+
+        content.append({"type": "text", "text": prompt_text})
 
         message = _client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": b64_data,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": EXTRACTION_PROMPT,
-                        },
-                    ],
-                }
-            ],
+            messages=[{"role": "user", "content": content}],
         )
 
         raw_response = message.content[0].text

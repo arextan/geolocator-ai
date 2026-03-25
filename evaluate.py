@@ -73,7 +73,7 @@ def main() -> None:
     # Step 1 — Extraction
     # ------------------------------------------------------------------
     from extractor import extract
-    features, _raw = extract(args.image)
+    features, _raw = extract([args.image])
     _print_extraction(features)
 
     # ------------------------------------------------------------------
