@@ -55,6 +55,124 @@ _SKIP_FEATURES: frozenset[str] = frozenset({
 # Minimum language_confidence to include language as a scored feature.
 _LANGUAGE_CONFIDENCE_MIN: float = 0.70
 
+# ---------------------------------------------------------------------------
+# Feature normalization
+#
+# Claude returns free-text descriptions; feature_region_map.py expects fixed
+# categorical keys.  Each entry below is (substring_pattern, canonical_value).
+# Patterns are matched in order against the lowercased Claude output; the
+# first match wins.  Returns None when nothing matches (→ DEFAULT_LIKELIHOOD).
+# ---------------------------------------------------------------------------
+
+_NORM_RULES: dict[str, list[tuple[str, str]]] = {
+    "architecture": [
+        ("soviet",             "soviet_bloc"),
+        ("brutalist",          "soviet_bloc"),
+        ("prefab",             "soviet_bloc"),
+        ("colonial_british",   "colonial_british"),
+        ("colonial british",   "colonial_british"),
+        ("colonial_portuguese","colonial_portuguese"),
+        ("colonial portuguese","colonial_portuguese"),
+        ("colonial_spanish",   "colonial_spanish"),
+        ("colonial spanish",   "colonial_spanish"),
+        ("modern glass",       "modern_glass"),
+        ("glass curtain",      "modern_glass"),
+        ("mud brick",          "mud_brick"),
+        ("adobe",              "mud_brick"),
+        ("mud wall",           "mud_brick"),
+        ("terracotta",         "terracotta_tiles"),
+        ("white cube",         "white_cube"),
+        ("white render",       "white_cube"),
+        # Wooden must come before corrugated — a building can be "wooden with corrugated roof"
+        ("timber",             "traditional_wooden"),
+        ("wooden",             "traditional_wooden"),
+        ("wood frame",         "traditional_wooden"),
+        ("log cabin",          "traditional_wooden"),
+        ("corrugated metal",   "corrugated_metal"),
+        ("corrugated",         "corrugated_metal"),
+        ("colonial",           "colonial_british"),   # generic colonial fallback
+    ],
+    "road_markings": [
+        ("nordic",            "nordic_dashed"),
+        ("yellow edge",       "yellow_edge_white_center"),
+        ("yellow curb",       "yellow_curb"),
+        ("yellow center",     "yellow_center"),
+        ("yellow",            "yellow_center"),
+        ("white center",      "white_center"),
+        ("white dashed",      "white_center"),
+        ("white",             "white_center"),
+    ],
+    "pole_type": [
+        ("h-frame",           "wooden_h_frame"),
+        ("h frame",           "wooden_h_frame"),
+        # concrete curved must come before bundled — a pole can be "concrete curved with bundled wires"
+        ("concrete curved",   "concrete_curved"),
+        ("concrete",          "concrete_curved"),
+        ("metal lattice",     "metal_lattice"),
+        ("lattice",           "metal_lattice"),
+        ("bundled",           "bundled_overhead"),
+    ],
+    "vegetation_specific": [
+        ("eucalyptus",        "eucalyptus"),
+        ("palm",              "palm"),
+        ("birch",             "birch"),
+        ("pine",              "evergreen"),
+        ("spruce",            "evergreen"),
+        ("fir",               "evergreen"),
+        ("conifer",           "evergreen"),
+        ("evergreen",         "evergreen"),
+    ],
+    "biome": [
+        ("temperate deciduous","temperate_deciduous"),
+        ("temperate",         "temperate_deciduous"),
+        ("tropical rainforest","tropical_rainforest"),
+        ("tropical rain",     "tropical_rainforest"),
+        ("tropical savanna",  "savanna"),
+        ("tropical dry",      "savanna"),
+        ("tropical",          "tropical_rainforest"),
+        ("savanna",           "savanna"),
+        ("cerrado",           "savanna"),
+        ("mediterranean",     "mediterranean"),
+        ("desert",            "desert"),
+        ("semi-arid",         "desert"),
+        ("steppe",            "desert"),
+        ("boreal",            "boreal"),
+        ("taiga",             "boreal"),
+        ("tundra",            "tundra"),
+        ("alpine",            "alpine"),
+        ("subtropical",       "subtropical_coastal"),
+    ],
+    "soil_color": [
+        ("red laterite",      "red_laterite"),
+        ("red-brown laterite","red_laterite"),
+        ("red-orange",        "red_laterite"),
+        ("red",               "red_laterite"),
+        ("black",             "black_chernozem"),
+        ("dark brown/black",  "black_chernozem"),
+        ("rocky",             "rocky_grey"),
+        ("grey",              "rocky_grey"),
+        ("gray",              "rocky_grey"),
+        ("sandy",             "sandy_pale"),
+        ("tan",               "sandy_pale"),
+        ("pale",              "sandy_pale"),
+    ],
+}
+
+
+def _normalize_value(feature: str, raw_value: str) -> str:
+    """Map a free-text Claude output to the nearest categorical key.
+
+    Returns the canonical value if a keyword matches, or the original
+    value unchanged (so exact matches in feature_region_map still work).
+    """
+    if feature not in _NORM_RULES:
+        return raw_value
+    lower = raw_value.lower()
+    for pattern, canonical in _NORM_RULES[feature]:
+        if pattern in lower:
+            return canonical
+    return raw_value  # no match — original value passed through to lookup
+
 
 def _collect_observed(features: dict) -> dict[str, str]:
     """Flatten pass_1/pass_2 into {feature: normalised_value} for scoring.
@@ -78,7 +196,8 @@ def _collect_observed(features: dict) -> dict[str, str]:
                 continue
             if feature == "language" and lang_conf < _LANGUAGE_CONFIDENCE_MIN:
                 continue
-            observed[feature] = str(value).lower().strip()
+            normalised = _normalize_value(feature, str(value).lower().strip())
+            observed[feature] = normalised
 
     return observed
 

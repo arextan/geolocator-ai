@@ -31,6 +31,7 @@ import polars as pl
 
 from extractor import extract
 from geo import resolve
+from refiner import refine
 from router import route
 from scorer import score as bayesian_score
 from scoring import geoguessr_score, haversine
@@ -155,15 +156,19 @@ def _existing_ids(con: duckdb.DuckDBPyConnection) -> set[str]:
 
 def _run_pipeline(
     paths: list[Path],
+    use_refiner: bool = False,
 ) -> tuple[dict, dict | None, dict, dict, str]:
-    """Run extract → route → score → geo for one location group.
+    """Run extract → route → score → [refine] → geo for one location group.
 
     Returns (features, router_result, scorer_result, geo_result, raw_response).
     """
     features, raw_response = extract([str(p) for p in paths])
     router_result = route(features)
     scorer_result = bayesian_score(features)
-    geo_result = resolve(scorer_result, router_result)
+    refiner_result = None
+    if use_refiner and router_result is None:
+        refiner_result = refine(features, scorer_result)
+    geo_result = resolve(scorer_result, router_result, refiner_result)
     return features, router_result, scorer_result, geo_result, raw_response
 
 
@@ -258,6 +263,7 @@ def main() -> None:
     parser.add_argument("--input",   required=True,       help="Directory of images to process")
     parser.add_argument("--actuals", default=None,        help="CSV with columns: filename, lat, lng")
     parser.add_argument("--db",      default=_DB_DEFAULT, help=f"DuckDB file path (default: {_DB_DEFAULT})")
+    parser.add_argument("--refine",  action="store_true", help="Make a second Claude call to narrow to city level")
     args = parser.parse_args()
 
     input_dir = Path(args.input)
@@ -310,7 +316,7 @@ def main() -> None:
 
             try:
                 features, router_result, scorer_result, geo_result, raw_response = (
-                    _run_pipeline(paths)
+                    _run_pipeline(paths, use_refiner=args.refine)
                 )
                 row = _build_row(
                     round_id, paths,

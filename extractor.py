@@ -41,15 +41,19 @@ def _compress_image(image_path: str) -> tuple[bytes, str]:
     path = Path(image_path)
     raw = path.read_bytes()
 
-    suffix = path.suffix.lower()
-    media_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-    }
-    media_type = media_types.get(suffix, "image/jpeg")
+    # Detect format from magic bytes, not file extension.
+    # collect.py saves Street View images with a .png extension even though
+    # the API returns JPEG data, so extension-based detection is unreliable.
+    if raw[:2] == b"\xff\xd8":
+        media_type = "image/jpeg"
+    elif raw[:4] == b"\x89PNG":
+        media_type = "image/png"
+    elif raw[:6] in (b"GIF87a", b"GIF89a"):
+        media_type = "image/gif"
+    elif raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        media_type = "image/webp"
+    else:
+        media_type = "image/jpeg"  # safe fallback for unknown formats
 
     if len(raw) <= _MAX_BYTES:
         return raw, media_type

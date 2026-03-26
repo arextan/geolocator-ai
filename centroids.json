@@ -1,0 +1,110 @@
+{
+  "japan": {
+    "lat": 37.6573,
+    "lng": 137.7164,
+    "n": 17,
+    "source": "geographic"
+  },
+  "south_korea": {
+    "lat": 36.4013,
+    "lng": 127.8767,
+    "n": 17,
+    "source": "geographic"
+  },
+  "china": {
+    "lat": 35.0,
+    "lng": 105.0,
+    "n": 1,
+    "source": "static_fallback"
+  },
+  "thailand": {
+    "lat": 15.0527,
+    "lng": 102.1042,
+    "n": 41,
+    "source": "geographic"
+  },
+  "southeast_asia": {
+    "lat": 1.2051,
+    "lng": 110.4517,
+    "n": 34,
+    "source": "geographic"
+  },
+  "india_subcontinent": {
+    "lat": 22.6073,
+    "lng": 80.7953,
+    "n": 64,
+    "source": "geographic"
+  },
+  "middle_east": {
+    "lat": 28.8323,
+    "lng": 51.2959,
+    "n": 19,
+    "source": "geographic"
+  },
+  "north_africa": {
+    "lat": 30.3585,
+    "lng": 16.4608,
+    "n": 21,
+    "source": "geographic"
+  },
+  "sub_saharan_africa": {
+    "lat": -4.0792,
+    "lng": 14.1281,
+    "n": 24,
+    "source": "geographic"
+  },
+  "south_africa": {
+    "lat": -27.9368,
+    "lng": 25.4103,
+    "n": 26,
+    "source": "geographic"
+  },
+  "russia_central_asia": {
+    "lat": 52.3612,
+    "lng": 69.7047,
+    "n": 37,
+    "source": "geographic"
+  },
+  "eastern_europe": {
+    "lat": 50.4184,
+    "lng": 21.1933,
+    "n": 82,
+    "source": "geographic"
+  },
+  "western_europe": {
+    "lat": 46.6194,
+    "lng": 5.8802,
+    "n": 40,
+    "source": "geographic"
+  },
+  "nordic": {
+    "lat": 63.0583,
+    "lng": 6.4065,
+    "n": 36,
+    "source": "geographic"
+  },
+  "brazil": {
+    "lat": -18.4299,
+    "lng": -55.298,
+    "n": 66,
+    "source": "geographic"
+  },
+  "latin_america": {
+    "lat": -22.8073,
+    "lng": -69.1409,
+    "n": 16,
+    "source": "geographic"
+  },
+  "usa_canada": {
+    "lat": 40.9338,
+    "lng": -96.3289,
+    "n": 37,
+    "source": "geographic"
+  },
+  "australia_new_zealand": {
+    "lat": -31.8316,
+    "lng": 151.3637,
+    "n": 29,
+    "source": "geographic"
+  }
+}

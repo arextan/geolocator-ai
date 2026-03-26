@@ -65,6 +65,11 @@ def main() -> None:
         type=float,
         help="Actual location (optional) — enables distance and GeoGuessr score output",
     )
+    parser.add_argument(
+        "--refine",
+        action="store_true",
+        help="Make a second Claude call to narrow to city level (medium/high confidence only)",
+    )
     args = parser.parse_args()
 
     print(f"\nProcessing: {args.image}")
@@ -99,14 +104,31 @@ def main() -> None:
     _print_scorer(scorer_result)
 
     # ------------------------------------------------------------------
-    # Step 4 — Geo resolution
+    # Step 4 — Refiner (optional city-level narrowing, before geo resolve)
+    # ------------------------------------------------------------------
+    refiner_result = None
+    if args.refine and router_result is None:
+        from refiner import refine
+        refiner_result = refine(features, scorer_result)
+        if refiner_result:
+            print("\n=== REFINER — city-level narrowing ===")
+            print(f"  city       {refiner_result['city_name']}, {refiner_result['country']}")
+            print(f"  lat        {refiner_result['lat']:.4f}")
+            print(f"  lng        {refiner_result['lng']:.4f}")
+            print(f"  reasoning  {refiner_result['reasoning']}")
+            print(f"  confidence {refiner_result['confidence']:.2f}")
+        else:
+            print("\n=== REFINER — skipped or failed (falling back to centroid) ===")
+
+    # ------------------------------------------------------------------
+    # Step 5 — Geo resolution
     # ------------------------------------------------------------------
     from geo import resolve
-    geo_result = resolve(scorer_result, router_result)
+    geo_result = resolve(scorer_result, router_result, refiner_result)
     _print_geo(geo_result)
 
     # ------------------------------------------------------------------
-    # Step 5 — Scoring (only if --actual provided)
+    # Step 6 — Scoring (only if --actual provided)
     # ------------------------------------------------------------------
     if args.actual is not None:
         actual_lat, actual_lng = args.actual

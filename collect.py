@@ -29,11 +29,18 @@ from config import GOOGLE_MAPS_API_KEY
 _SV_IMAGE_URL    = "https://maps.googleapis.com/maps/api/streetview"
 _SV_METADATA_URL = "https://maps.googleapis.com/maps/api/streetview/metadata"
 
-HEADINGS    = [0, 90, 180, 270]
-_IMG_SIZE   = "640x640"
-_FOV        = 90
-_PITCH      = 0
-_SNAP_RADIUS = 500   # metres — how far to snap to nearest panorama
+HEADINGS  = [0, 90, 180, 270]
+_IMG_SIZE = "640x640"
+_FOV      = 90
+_PITCH    = 0
+
+# Snap-radius tiers (metres).  The metadata API snaps to the nearest panorama
+# within this distance.  Dense regions use a small radius to stay on-point;
+# sparse regions use a large radius so rural roads and villages are reachable
+# without biasing the sample toward cities.  API maximum is 50,000 m.
+_RADIUS_DENSE  =  1_000   # W.Europe, Japan, S.Korea — road every ~500 m
+_RADIUS_MEDIUM = 10_000   # Brazil, SE Asia, India, Eastern Europe
+_RADIUS_SPARSE = 50_000   # Russia, Africa, Middle East, Latin America outback
 
 # ---------------------------------------------------------------------------
 # Region sampling specs
@@ -49,87 +56,83 @@ _SNAP_RADIUS = 500   # metres — how far to snap to nearest panorama
 
 _REGION_SPECS: dict[str, dict] = {
     "western_europe": {
-        "target": 40, "mult": 3,
+        "target": 40, "mult": 3, "snap_radius": _RADIUS_DENSE,
         "boxes": [(36.0, 70.0, -9.0, 28.0)],
     },
     "usa_canada": {
-        "target": 40, "mult": 2,
+        "target": 40, "mult": 2, "snap_radius": _RADIUS_DENSE,
         "boxes": [
             (25.0, 50.0, -125.0, -65.0),   # continental USA
-            (43.0, 60.0, -140.0, -53.0),   # southern Canada
+            (43.0, 60.0, -140.0, -53.0),   # Canada
         ],
     },
     "brazil": {
-        "target": 30, "mult": 4,
+        "target": 30, "mult": 4, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(-33.0, 5.0, -73.0, -35.0)],
     },
     "russia_central_asia": {
-        "target": 28, "mult": 6,
+        "target": 28, "mult": 6, "snap_radius": _RADIUS_SPARSE,
         "boxes": [
             (50.0, 70.0, 30.0, 130.0),     # European + western Russia
             (40.0, 55.0, 55.0, 90.0),      # Kazakhstan / Central Asia
         ],
     },
     "japan": {
-        "target": 28, "mult": 2,
+        "target": 28, "mult": 2, "snap_radius": _RADIUS_DENSE,
         "boxes": [(30.0, 45.0, 129.0, 146.0)],
     },
     "eastern_europe": {
-        "target": 28, "mult": 3,
+        "target": 28, "mult": 3, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(44.0, 58.0, 14.0, 32.0)],
     },
     "latin_america": {
-        "target": 28, "mult": 5,
+        "target": 28, "mult": 5, "snap_radius": _RADIUS_SPARSE,
         "boxes": [(-55.0, 22.0, -92.0, -35.0)],
     },
     "southeast_asia": {
-        "target": 28, "mult": 4,
+        "target": 38, "mult": 4, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(-8.0, 22.0, 95.0, 141.0)],
     },
     "india_subcontinent": {
-        "target": 25, "mult": 4,
+        "target": 35, "mult": 4, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(6.0, 36.0, 67.0, 97.0)],
     },
     "sub_saharan_africa": {
-        "target": 25, "mult": 10,
+        "target": 25, "mult": 10, "snap_radius": _RADIUS_SPARSE,
         "boxes": [(-35.0, 15.0, -18.0, 51.0)],
     },
     "australia_new_zealand": {
-        "target": 25, "mult": 3,
+        "target": 25, "mult": 3, "snap_radius": _RADIUS_SPARSE,
         "boxes": [
             (-44.0, -10.0, 112.0, 154.0),  # Australia
             (-47.0, -34.0, 166.0, 178.0),  # New Zealand
         ],
     },
     "south_korea": {
-        "target": 20, "mult": 2,
+        "target": 20, "mult": 2, "snap_radius": _RADIUS_DENSE,
         "boxes": [(34.0, 38.5, 126.0, 130.0)],
     },
-    "china": {
-        "target": 20, "mult": 4,
-        "boxes": [(18.0, 53.0, 73.0, 135.0)],
-    },
     "nordic": {
-        "target": 20, "mult": 4,
+        "target": 20, "mult": 4, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [
             (55.0, 71.0, 4.0, 31.0),
             (63.0, 66.0, -24.0, -13.0),    # Iceland
         ],
     },
     "thailand": {
-        "target": 18, "mult": 3,
+        "target": 18, "mult": 3, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(5.5, 21.0, 97.5, 105.5)],
     },
     "middle_east": {
-        "target": 18, "mult": 5,
+        "target": 18, "mult": 5, "snap_radius": _RADIUS_SPARSE,
         "boxes": [(12.0, 37.0, 34.0, 63.0)],
     },
     "south_africa": {
-        "target": 18, "mult": 3,
+        "target": 18, "mult": 3, "snap_radius": _RADIUS_MEDIUM,
         "boxes": [(-35.0, -22.0, 16.0, 33.0)],
     },
     "north_africa": {
-        "target": 15, "mult": 6,
+        "target": 15, "mult": 6, "snap_radius": _RADIUS_SPARSE,
         "boxes": [(19.0, 37.0, -17.0, 37.0)],
     },
 }
@@ -178,6 +181,7 @@ async def _check_metadata(
     client: httpx.AsyncClient,
     lat: float,
     lng: float,
+    radius: int,
 ) -> tuple[float, float] | None:
     """Query Street View metadata endpoint.
 
@@ -186,7 +190,7 @@ async def _check_metadata(
     """
     resp = await client.get(
         _SV_METADATA_URL,
-        params={"location": f"{lat},{lng}", "radius": _SNAP_RADIUS, "key": GOOGLE_MAPS_API_KEY},
+        params={"location": f"{lat},{lng}", "radius": radius, "key": GOOGLE_MAPS_API_KEY},
     )
     resp.raise_for_status()
     data = resp.json()
@@ -228,6 +232,7 @@ async def _collect_location(
     lng: float,
     loc_idx: int,
     output_dir: Path,
+    snap_radius: int,
 ) -> tuple[bool, float, float]:
     """Process one candidate location.
 
@@ -238,7 +243,7 @@ async def _collect_location(
     Returns (success, actual_lat, actual_lng).
     success is True only if all 4 headings downloaded cleanly.
     """
-    actual = await _check_metadata(client, lat, lng)
+    actual = await _check_metadata(client, lat, lng, snap_radius)
     if actual is None:
         return False, lat, lng
 
@@ -282,14 +287,15 @@ def _dry_run(locations: int) -> None:
     targets = _scale_targets(locations)
     total_shown = 0
     print(f"DRY RUN — {locations} locations across {len(_REGION_SPECS)} regions\n")
-    print(f"  {'region':<25}  {'target':>6}  {'sample points'}")
-    print(f"  {'-'*25}  {'-'*6}  {'-'*40}")
+    print(f"  {'region':<25}  {'target':>6}  {'radius':>7}  {'sample points'}")
+    print(f"  {'-'*25}  {'-'*6}  {'-'*7}  {'-'*40}")
     for region, spec in _REGION_SPECS.items():
         n = targets[region]
         total_shown += n
         samples = [_sample_point(spec["boxes"]) for _ in range(min(3, n))]
         sample_str = "  ".join(f"({lat:8.4f}, {lng:9.4f})" for lat, lng in samples)
-        print(f"  {region:<25}  {n:>6}  {sample_str}")
+        radius_str = f"{spec['snap_radius']:,}m"
+        print(f"  {region:<25}  {n:>6}  {radius_str:>7}  {sample_str}")
     print(f"\n  {'TOTAL':<25}  {total_shown:>6}")
 
 
@@ -329,7 +335,7 @@ async def _run(args: argparse.Namespace) -> None:
 
                 try:
                     ok, actual_lat, actual_lng = await _collect_location(
-                        client, sem, lat, lng, loc_idx, output_dir
+                        client, sem, lat, lng, loc_idx, output_dir, spec["snap_radius"]
                     )
                 except Exception as exc:
                     print(f"  error ({lat:.4f}, {lng:.4f}): {exc}")

@@ -15,7 +15,7 @@ CLAUDE_MODEL: str = "claude-sonnet-4-6"
 # Scores above MEDIUM_THRESHOLD → use country centroid
 # Below medium → biome-aware hedge (low tier)
 HIGH_CONFIDENCE_THRESHOLD: float = 0.65
-MEDIUM_CONFIDENCE_THRESHOLD: float = 0.35
+MEDIUM_CONFIDENCE_THRESHOLD: float = 0.20  # calibrated from 608 rounds (was 0.35)
 
 # Geocoding
 NOMINATIM_USER_AGENT: str = "geolocator-ai/1.0"
