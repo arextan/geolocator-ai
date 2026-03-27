@@ -24,10 +24,14 @@ _PASS_2_KEYS = {
     "soil_color", "architecture", "pole_type", "road_surface",
     "road_markings", "infrastructure_quality",
 }
+_LOCATION_GUESS_KEYS = {
+    "city", "country", "lat", "lng", "reasoning", "confidence",
+}
 
 _EMPTY_RESULT: dict = {
     "pass_1": {k: ([] if k == "readable_text" else None) for k in _PASS_1_KEYS},
     "pass_2": {k: None for k in _PASS_2_KEYS},
+    "location_guess": {k: None for k in _LOCATION_GUESS_KEYS},
 }
 
 
@@ -142,7 +146,7 @@ def extract(image_paths: list[str]) -> tuple[dict, str]:
 
         message = _client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=1024,
+            max_tokens=1536,
             messages=[{"role": "user", "content": content}],
         )
 
@@ -151,6 +155,10 @@ def extract(image_paths: list[str]) -> tuple[dict, str]:
 
         if "pass_1" not in parsed or "pass_2" not in parsed:
             return _EMPTY_RESULT.copy(), raw_response
+
+        # Ensure location_guess key always present, even if Claude omitted it
+        if "location_guess" not in parsed:
+            parsed["location_guess"] = {k: None for k in _LOCATION_GUESS_KEYS}
 
         return parsed, raw_response
 

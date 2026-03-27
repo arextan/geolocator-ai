@@ -1,16 +1,15 @@
-"""Single-image evaluation CLI — phase 1 full pipeline.
+"""Single-image evaluation CLI.
 
 Usage:
     python evaluate.py <image_path>
     python evaluate.py <image_path> --actual <lat> <lng>
 
 Examples:
-    python evaluate.py data\images\test.png
-    python evaluate.py data\images\test.png --actual 21.03 105.85
+    python evaluate.py data/images/test.png
+    python evaluate.py data/images/test.png --actual 21.03 105.85
 """
 
 import argparse
-import sys
 
 
 def _print_extraction(features: dict) -> None:
@@ -24,8 +23,18 @@ def _print_extraction(features: dict) -> None:
         print(f"  {key:<24} {val}")
 
 
+def _print_location_guess(guess: dict) -> None:
+    print("\n=== LOCATION GUESS (Claude) ===")
+    print(f"  city       {guess.get('city')}")
+    print(f"  country    {guess.get('country')}")
+    print(f"  lat        {guess.get('lat')}")
+    print(f"  lng        {guess.get('lng')}")
+    print(f"  reasoning  {guess.get('reasoning')}")
+    print(f"  confidence {guess.get('confidence')}")
+
+
 def _print_scorer(scorer_result: dict) -> None:
-    print("\n=== BAYESIAN SCORER ===")
+    print("\n=== BAYESIAN SCORER (analytical only) ===")
     print(f"  region           {scorer_result['region']}")
     print(f"  score            {scorer_result['score']:.4f}")
     print(f"  confidence_tier  {scorer_result['confidence_tier']}")
@@ -38,10 +47,10 @@ def _print_scorer(scorer_result: dict) -> None:
 
 def _print_geo(geo_result: dict) -> None:
     print("\n=== COORDINATE RESOLUTION ===")
-    print(f"  source           {geo_result['source']}")
-    print(f"  region           {geo_result['region']}")
-    print(f"  lat              {geo_result['lat']:.4f}")
-    print(f"  lng              {geo_result['lng']:.4f}")
+    print(f"  source     {geo_result['source']}")
+    print(f"  region     {geo_result['region']}")
+    print(f"  lat        {geo_result['lat']:.4f}")
+    print(f"  lng        {geo_result['lng']:.4f}")
 
 
 def _print_score(guess_lat: float, guess_lng: float, actual_lat: float, actual_lng: float) -> None:
@@ -65,24 +74,20 @@ def main() -> None:
         type=float,
         help="Actual location (optional) — enables distance and GeoGuessr score output",
     )
-    parser.add_argument(
-        "--refine",
-        action="store_true",
-        help="Make a second Claude call to narrow to city level (medium/high confidence only)",
-    )
     args = parser.parse_args()
 
     print(f"\nProcessing: {args.image}")
 
     # ------------------------------------------------------------------
-    # Step 1 — Extraction
+    # Step 1 — Extraction (features + location guess in one call)
     # ------------------------------------------------------------------
     from extractor import extract
     features, _raw = extract([args.image])
     _print_extraction(features)
+    _print_location_guess(features.get("location_guess", {}))
 
     # ------------------------------------------------------------------
-    # Step 2 — Router (geocode path)
+    # Step 2 — Router (geocode overrides Claude's guess when place found)
     # ------------------------------------------------------------------
     from router import route
     router_result = route(features)
@@ -94,41 +99,24 @@ def main() -> None:
         print(f"  lat          {router_result['lat']:.4f}")
         print(f"  lng          {router_result['lng']:.4f}")
     else:
-        print("\n=== ROUTER — Bayesian path (no geocode) ===")
+        print("\n=== ROUTER — no geocodable place name found ===")
 
     # ------------------------------------------------------------------
-    # Step 3 — Scorer (always run for the trace, even on geocode path)
+    # Step 3 — Scorer (analytical only — not used for the final guess)
     # ------------------------------------------------------------------
     from scorer import score as bayesian_score
     scorer_result = bayesian_score(features)
     _print_scorer(scorer_result)
 
     # ------------------------------------------------------------------
-    # Step 4 — Refiner (optional city-level narrowing, before geo resolve)
-    # ------------------------------------------------------------------
-    refiner_result = None
-    if args.refine and router_result is None:
-        from refiner import refine
-        refiner_result = refine(features, scorer_result)
-        if refiner_result:
-            print("\n=== REFINER — city-level narrowing ===")
-            print(f"  city       {refiner_result['city_name']}, {refiner_result['country']}")
-            print(f"  lat        {refiner_result['lat']:.4f}")
-            print(f"  lng        {refiner_result['lng']:.4f}")
-            print(f"  reasoning  {refiner_result['reasoning']}")
-            print(f"  confidence {refiner_result['confidence']:.2f}")
-        else:
-            print("\n=== REFINER — skipped or failed (falling back to centroid) ===")
-
-    # ------------------------------------------------------------------
-    # Step 5 — Geo resolution
+    # Step 4 — Coordinate resolution
     # ------------------------------------------------------------------
     from geo import resolve
-    geo_result = resolve(scorer_result, router_result, refiner_result)
+    geo_result = resolve(features, router_result)
     _print_geo(geo_result)
 
     # ------------------------------------------------------------------
-    # Step 6 — Scoring (only if --actual provided)
+    # Step 5 — Scoring (only if --actual provided)
     # ------------------------------------------------------------------
     if args.actual is not None:
         actual_lat, actual_lng = args.actual

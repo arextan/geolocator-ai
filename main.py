@@ -2,7 +2,7 @@
 main.py — Phase 2 batch orchestration.
 
 Processes a directory of images through the full pipeline
-(extract → route → score → geo) and stores every round in DuckDB.
+(extract → route → [score analytical] → geo) and stores every round in DuckDB.
 
 Images produced by collect.py are grouped by location prefix:
     loc_0001_h0.png, loc_0001_h90.png, loc_0001_h180.png, loc_0001_h270.png
@@ -18,6 +18,7 @@ Usage:
     python main.py --input data/images/
     python main.py --input data/images/ --actuals actuals.csv
     python main.py --input data/images/ --actuals actuals.csv --db geoguessr.db
+    python main.py --input data/images/ --reset-db
 """
 
 import argparse
@@ -31,7 +32,6 @@ import polars as pl
 
 from extractor import extract
 from geo import resolve
-from refiner import refine
 from router import route
 from scorer import score as bayesian_score
 from scoring import geoguessr_score, haversine
@@ -68,10 +68,14 @@ CREATE TABLE IF NOT EXISTS rounds (
     road_surface           VARCHAR,
     road_markings          VARCHAR,
     infrastructure_quality VARCHAR,
+    guessed_city           VARCHAR,
+    guessed_country        VARCHAR,
+    guess_reasoning        VARCHAR,
+    guess_confidence       FLOAT,
     path_taken             VARCHAR,
-    confidence_score       FLOAT,
-    confidence_tier        VARCHAR,
-    top_regions            JSON,
+    scorer_region          VARCHAR,
+    scorer_confidence      FLOAT,
+    scorer_top_regions     JSON,
     features_used          VARCHAR[],
     guess_lat              DOUBLE,
     guess_lng              DOUBLE,
@@ -156,19 +160,15 @@ def _existing_ids(con: duckdb.DuckDBPyConnection) -> set[str]:
 
 def _run_pipeline(
     paths: list[Path],
-    use_refiner: bool = False,
 ) -> tuple[dict, dict | None, dict, dict, str]:
-    """Run extract → route → score → [refine] → geo for one location group.
+    """Run extract → route → score (analytical) → geo for one location group.
 
     Returns (features, router_result, scorer_result, geo_result, raw_response).
     """
     features, raw_response = extract([str(p) for p in paths])
     router_result = route(features)
     scorer_result = bayesian_score(features)
-    refiner_result = None
-    if use_refiner and router_result is None:
-        refiner_result = refine(features, scorer_result)
-    geo_result = resolve(scorer_result, router_result, refiner_result)
+    geo_result = resolve(features, router_result)
     return features, router_result, scorer_result, geo_result, raw_response
 
 
@@ -185,6 +185,7 @@ def _build_row(
     """Flatten all pipeline outputs into a dict matching the rounds schema."""
     p1 = features.get("pass_1", {})
     p2 = features.get("pass_2", {})
+    lg = features.get("location_guess", {}) or {}
 
     actual_lat: float | None = None
     actual_lng: float | None = None
@@ -198,7 +199,7 @@ def _build_row(
         )
         pts = geoguessr_score(distance_km)
 
-    path_taken = router_result["path"] if router_result else "bayesian"
+    path_taken = router_result["path"] if router_result else "claude"
 
     return {
         "round_id":               round_id,
@@ -226,11 +227,16 @@ def _build_row(
         "road_surface":           p2.get("road_surface"),
         "road_markings":          p2.get("road_markings"),
         "infrastructure_quality": p2.get("infrastructure_quality"),
-        # routing + scoring
+        # location_guess
+        "guessed_city":           lg.get("city"),
+        "guessed_country":        lg.get("country"),
+        "guess_reasoning":        lg.get("reasoning"),
+        "guess_confidence":       lg.get("confidence"),
+        # routing + analytical scorer
         "path_taken":             path_taken,
-        "confidence_score":       scorer_result.get("score"),
-        "confidence_tier":        scorer_result.get("confidence_tier"),
-        "top_regions":            json.dumps(scorer_result.get("top_regions", [])),
+        "scorer_region":          scorer_result.get("region"),
+        "scorer_confidence":      scorer_result.get("score"),
+        "scorer_top_regions":     json.dumps(scorer_result.get("top_regions", [])),
         "features_used":          scorer_result.get("features_used", []),
         # coordinates
         "guess_lat":              geo_result["lat"],
@@ -260,10 +266,10 @@ def _insert_row(con: duckdb.DuckDBPyConnection, row: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="GeoLocator AI — batch pipeline")
-    parser.add_argument("--input",   required=True,       help="Directory of images to process")
-    parser.add_argument("--actuals", default=None,        help="CSV with columns: filename, lat, lng")
-    parser.add_argument("--db",      default=_DB_DEFAULT, help=f"DuckDB file path (default: {_DB_DEFAULT})")
-    parser.add_argument("--refine",  action="store_true", help="Make a second Claude call to narrow to city level")
+    parser.add_argument("--input",    required=True,       help="Directory of images to process")
+    parser.add_argument("--actuals",  default=None,        help="CSV with columns: filename, lat, lng")
+    parser.add_argument("--db",       default=_DB_DEFAULT, help=f"DuckDB file path (default: {_DB_DEFAULT})")
+    parser.add_argument("--reset-db", action="store_true", help="Drop and recreate the rounds table before processing")
     args = parser.parse_args()
 
     input_dir = Path(args.input)
@@ -296,6 +302,10 @@ def main() -> None:
 
     con = duckdb.connect(args.db)
     try:
+        if args.reset_db:
+            con.execute("DROP TABLE IF EXISTS rounds")
+            print("[main] rounds table dropped")
+
         con.execute(_CREATE_TABLE_SQL)
         existing = _existing_ids(con)
 
@@ -316,7 +326,7 @@ def main() -> None:
 
             try:
                 features, router_result, scorer_result, geo_result, raw_response = (
-                    _run_pipeline(paths, use_refiner=args.refine)
+                    _run_pipeline(paths)
                 )
                 row = _build_row(
                     round_id, paths,
@@ -326,11 +336,10 @@ def main() -> None:
                 _insert_row(con, row)
                 processed += 1
 
-                tier    = scorer_result.get("confidence_tier", "?")
-                region  = geo_result.get("region", "?")
                 source  = geo_result.get("source", "?")
+                region  = geo_result.get("region", "?")
                 score_s = f"  {row['geoguessr_score']} pts" if row["geoguessr_score"] is not None else ""
-                print(f"  -> {region} [{tier}] via {source}{score_s}")
+                print(f"  -> {region} via {source}{score_s}")
 
             except Exception as exc:
                 failed += 1
