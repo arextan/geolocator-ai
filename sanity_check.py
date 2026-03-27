@@ -16,8 +16,21 @@ print('\n=== PATH DISTRIBUTION ===')
 for row in con.execute('SELECT path_taken, COUNT(*), ROUND(AVG(geoguessr_score),0) FROM rounds GROUP BY path_taken').fetchall():
     print(f'  {row[0]}: {row[1]} rounds, avg {row[2]} pts')
 
-print('\n=== CONFIDENCE TIERS ===')
-for row in con.execute('SELECT confidence_tier, COUNT(*), ROUND(AVG(geoguessr_score),0) FROM rounds GROUP BY confidence_tier').fetchall():
+print('\n=== GUESS CONFIDENCE BUCKETS ===')
+for row in con.execute("""
+    SELECT
+        CASE
+            WHEN guess_confidence >= 0.7 THEN 'high (>=0.7)'
+            WHEN guess_confidence >= 0.4 THEN 'medium (0.4-0.7)'
+            WHEN guess_confidence IS NOT NULL THEN 'low (<0.4)'
+            ELSE 'null'
+        END AS bucket,
+        COUNT(*),
+        ROUND(AVG(geoguessr_score), 0)
+    FROM rounds
+    GROUP BY bucket
+    ORDER BY bucket
+""").fetchall():
     print(f'  {row[0]}: {row[1]} rounds, avg {row[2]} pts')
 
 print('\n=== NULL RATES FOR KEY FEATURES ===')
@@ -27,8 +40,8 @@ for col in ['language','script','driving_side','biome','architecture','road_mark
     print(f'  {col:<24} {100*nulls/total:.0f}% null')
 
 print('\n=== TOP 5 WORST ROUNDS ===')
-for row in con.execute('SELECT round_id, confidence_tier, guess_lat, guess_lng, actual_lat, actual_lng, distance_km, geoguessr_score FROM rounds ORDER BY geoguessr_score ASC LIMIT 5').fetchall():
-    print(f'  {row[0]}: {row[6]:.0f}km away, {row[7]} pts, tier={row[1]}')
+for row in con.execute('SELECT round_id, guess_confidence, guess_lat, guess_lng, actual_lat, actual_lng, distance_km, geoguessr_score FROM rounds ORDER BY geoguessr_score ASC LIMIT 5').fetchall():
+    print(f'  {row[0]}: {row[6]:.0f}km away, {row[7]} pts, conf={row[1]}')
 
 print('\n=== READABLE TEXT RATE ===')
 has_text = con.execute("SELECT COUNT(*) FROM rounds WHERE readable_text != '[]' AND readable_text IS NOT NULL").fetchone()[0]
