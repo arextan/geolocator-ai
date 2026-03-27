@@ -82,7 +82,7 @@ Rules:
 - confidence is your 0.0–1.0 certainty that this specific city is correct
 - If you cannot narrow below country level, set city_name to the country capital
 
-{"city_name": "...", "country": "...", "reasoning": "...", "confidence": 0.0}
+{{"city_name": "...", "country": "...", "reasoning": "...", "confidence": 0.0}}
 """
 
 
