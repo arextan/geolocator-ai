@@ -1,0 +1,31 @@
+round_id,guessed_city,guessed_country,actual_lat,actual_lng,actual_country,distance_km,guess_confidence,guess_reasoning,geoguessr_score
+loc_0129,Salento,Colombia,27.300964,91.150493,India,16191.847,0.28,"Narrow mountain road, bamboo vegetation, lush green tropical hills suggest Colombian coffee region Andes.",0
+loc_0165,Abilene,United States,-26.974564,26.266273,South Africa,14828.129,0.35,"Flat semi-arid Texas landscape, mesquite scrub, dry golden grass, wooden H-frame poles, right-hand driving rural highway.",0
+loc_0341,rural Chiba or Kanagawa prefecture,Japan,-3.688554,-49.921899,Brazil,16370.934,0.55,"Japanese kei truck plates, plastic tunnel greenhouses, left-hand driving, bundled utility poles, Japanese script on watermark",0
+loc_0348,Katherine,Australia,-22.511502,-57.570649,Argentina,15761.454,0.45,"Left-hand driving, red laterite soil, tropical savanna vegetation, and road style match Northern Territory Australia.",0
+loc_0464,Midland,United States,-22.138248,21.035474,South Africa,14341.448,0.45,"Flat semi-arid terrain, yellow center line, wooden poles, sparse mesquite scrub match West Texas Permian Basin.",0
+loc_0465,Caborca,Mexico,-15.726644,12.949162,Africa (other),14222.641,0.45,"Sonoran Desert landscape, sparse mesquite scrub, flat terrain, distant volcanic mountains, low-density Mexican desert town architecture.",0
+loc_0479,,,-45.247821,167.585449,New Zealand,15930.138,0.0,No imagery available in any of the four Street View directions; no geographic features can be extracted.,0
+loc_0494,,,-45.247821,167.585449,New Zealand,15930.138,0.0,No imagery available in any of the four Street View directions; no features observable.,0
+loc_0571,Mora,United States,-30.386085,27.600143,South Africa,15601.517,0.28,"Semi-arid high-elevation valley, rolling mesa terrain, sparse vegetation, narrow asphalt road consistent with rural New Mexico.",0
+loc_0578,Saltillo,Mexico,-33.200949,26.618581,South Africa,14905.751,0.45,"Yellow centerline, right-hand traffic, matorral vegetation, rocky terrain, and kilometer marker style suggest northern Mexico highlands.",0
+loc_0583,Rock Springs,United States,-30.860666,23.305637,South Africa,15616.352,0.42,"Sagebrush high desert, yellow centerline, wooden poles, flat terrain with buttes matches Wyoming/Great Basin US.",0
+loc_0601,Nullarbor,Australia,26.544709,-13.828166,Africa (other),16376.412,0.62,"Flat cracked clay pan, arid scrubland, left-hand drive white ute, matches Australian Nullarbor Plain.",0
+loc_0232,Bathurst,Australia,-30.860623,-54.330317,Argentina,12440.629,0.35,"Left-side driving, sandy soil, dry temperate grassland with scrub vegetation typical of rural New South Wales, Australia.",1
+loc_0489,,,-13.973268,136.45969,Australia,13261.99,0.0,No imagery available in any of the four Street View directions; no features observable.,1
+loc_0491,,,-15.174819,128.550894,Australia,12477.613,0.0,No imagery available in any of the four Street View directions; no geographic features can be extracted.,1
+loc_0562,El Paso,United States,34.768703,49.588783,Africa (other),12181.518,0.3,"Chihuahuan Desert terrain, limestone escarpment, vast basin views suggest Trans-Pecos Texas near El Paso or Guadalupe Mountains.",1
+loc_0334,Maguiresbridge area / Connemara coast,Ireland,-37.721151,-73.664807,Chile,11814.782,0.62,"Grey limestone karst rock platforms, yellow lichen, altocumulus sky, green hills, and typical western Irish coastal scenery.",2
+loc_0459,At sea near island (possibly Caribbean or Indian Ocean),International waters,-27.173123,32.927031,South Africa,11787.891,0.15,"Cruise ship deck at sea, deep blue tropical water, distant low island, bright tropical sun suggest Caribbean region.",2
+loc_0495,Superagui,Brazil,-40.98689,172.104963,New Zealand,11563.268,0.52,"Dense Atlantic rainforest meeting wide deserted beach with river mouth matches Superagui National Park, Paraná, Brazil.",2
+loc_0460,Bhubaneswar,India,-15.114557,-10.722645,Africa (other),11249.33,0.55,"Dhokra/Bastar tribal metal craft figurines and Pattachitra art typical of Odisha craft stores, India left-hand traffic",3
+loc_0508,Appalachian rural area,United States,36.496423,129.297384,South Korea,11205.76,0.35,"Concrete rural road, wooden utility poles, dense temperate deciduous forest with pines suggest rural Appalachian USA.",3
+loc_0539,Ouagadougou,Burkina Faso,14.17092,103.386295,Vietnam,11233.3125,0.25,"Red laterite dirt road, savanna vegetation, flat terrain, and low infrastructure quality suggest West African Sahel region.",3
+loc_0606,Twentynine Palms,United States,34.339309,8.919878,Tunisia,10486.954,0.38,Flat sandy Mojave/Sonoran desert with distant mountain ranges matches inland Southern California desert region.,4
+loc_0063,Point Reyes Station,United States,-30.235097,-54.640299,Argentina,10378.779,0.45,"Coastal California chaparral, yellow center lines, rolling hills, eucalyptus, and road quality match Marin County/Point Reyes area.",5
+loc_0301,Hudson Valley,United States,39.99121,141.748635,Japan,10265.214,0.25,"Narrow wooded road with right-side driving, temperate deciduous forest with pine mix suggests northeastern USA.",5
+loc_0461,Kuala Lumpur,Malaysia,0.073624,9.634135,Africa (other),10236.478,0.25,Dense lowland tropical rainforest with moss-covered sandstone outcrops and stream strongly suggests Peninsular Malaysia or Borneo.,5
+loc_0588,Broken Hill,Australia,-28.697719,26.229796,South Africa,10376.016,0.42,"Flat semi-arid grassland, red-tan soil, eucalyptus windbreaks, unsealed road, left-hand driving indicate rural outback Australia.",5
+loc_0524,Misti Volcano / Arequipa,Peru,65.149775,-16.348302,Unknown,10156.336,0.45,"Black volcanic terrain, high-altitude Andean landscape, white Toyota 4WD typical of Peruvian volcano approaches near Arequipa.",6
+loc_0283,Burlington,United States,51.68988,61.907955,Russia,9782.075,0.35,"Flat shortgrass prairie, white center lines, two-lane highway, canola/wheat fields suggest eastern Colorado or Kansas high plains.",7
+loc_0345,,,-54.005871,-38.046921,South America (other),9908.4795,0.0,No imagery available in any of the four Street View directions; no geographic features detectable.,7
