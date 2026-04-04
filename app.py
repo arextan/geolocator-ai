@@ -10,6 +10,7 @@ Run:
 """
 
 import tempfile
+import time
 from pathlib import Path
 
 import duckdb
@@ -17,6 +18,7 @@ import folium
 import pydeck as pdk
 import polars as pl
 import streamlit as st
+from PIL import ImageGrab
 from streamlit_folium import st_folium
 
 st.set_page_config(
@@ -196,32 +198,89 @@ def _feature_table(p1: dict, p2: dict) -> None:
 # Tab: Live Analysis
 # ---------------------------------------------------------------------------
 
-def tab_live() -> None:
-    uploaded = st.file_uploader(
-        "Upload a Street View image",
-        type=["png", "jpg", "jpeg", "webp"],
-        label_visibility="collapsed",
+def _do_screenshot() -> str | None:
+    """Show a 5-second countdown, capture the screen, save to a temp file.
+    Returns the temp file path, or None on failure.
+    """
+    slot = st.empty()
+    for i in range(5, 0, -1):
+        slot.markdown(
+            f"<div style='text-align:center;padding:2rem 0'>"
+            f"<div style='font-size:5rem;font-weight:800;line-height:1'>{i}</div>"
+            f"<div style='font-size:1rem;color:#888;margin-top:0.5rem'>"
+            f"Switch to GeoGuessr now</div></div>",
+            unsafe_allow_html=True,
+        )
+        time.sleep(1)
+    slot.markdown(
+        "<div style='text-align:center;padding:1rem 0;font-size:1.5rem'>📸 Capturing…</div>",
+        unsafe_allow_html=True,
     )
+    try:
+        img = ImageGrab.grab()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            img.save(tmp.name, format="PNG")
+            path = tmp.name
+        slot.empty()
+        return path
+    except Exception as exc:
+        slot.error(f"Screen capture failed: {exc}")
+        return None
 
-    if uploaded is None:
+
+def tab_live() -> None:
+    # ------------------------------------------------------------------
+    # Input row: file uploader on the left, screenshot button on the right
+    # ------------------------------------------------------------------
+    up_col, btn_col = st.columns([3, 1], gap="medium")
+
+    with up_col:
+        uploaded = st.file_uploader(
+            "Upload a Street View image",
+            type=["png", "jpg", "jpeg", "webp"],
+            label_visibility="collapsed",
+        )
+
+    with btn_col:
+        st.markdown("<div style='height:0.3rem'></div>", unsafe_allow_html=True)
+        take_screenshot = st.button(
+            "📸  Screenshot in 5s",
+            use_container_width=True,
+            help="Click, switch to GeoGuessr, then hold still — the screen is captured after 5 seconds.",
+        )
+
+    # ------------------------------------------------------------------
+    # Resolve image path from either source
+    # ------------------------------------------------------------------
+    tmp_path: str | None = None
+
+    if take_screenshot:
+        tmp_path = _do_screenshot()
+        if tmp_path:
+            st.session_state["screenshot_path"] = tmp_path
+        else:
+            return
+    elif uploaded is not None:
+        suffix = Path(uploaded.name).suffix or ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(uploaded.read())
+            tmp_path = tmp.name
+        st.session_state["screenshot_path"] = tmp_path
+    elif "screenshot_path" in st.session_state:
+        # Re-use the last screenshot when the user adjusts actual-location
+        # inputs (which trigger a rerun without a new upload/screenshot)
+        tmp_path = st.session_state["screenshot_path"]
+
+    if tmp_path is None:
         st.markdown(
-            """
-            <div style="
-                border: 2px dashed #ddd; border-radius: 12px;
-                padding: 3rem; text-align: center; color: #aaa;
-            ">
-                <div style="font-size: 2.5rem;">🌍</div>
-                <div style="margin-top: 0.5rem;">Upload a Street View image to analyse</div>
-            </div>
-            """,
+            "<div style='border:2px dashed #ddd;border-radius:12px;"
+            "padding:3rem;text-align:center;color:#aaa'>"
+            "<div style='font-size:2.5rem'>🌍</div>"
+            "<div style='margin-top:0.5rem'>Upload an image or use the Screenshot button</div>"
+            "</div>",
             unsafe_allow_html=True,
         )
         return
-
-    suffix = Path(uploaded.name).suffix or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded.read())
-        tmp_path = tmp.name
 
     with st.spinner("Running pipeline…"):
         try:
