@@ -13,9 +13,11 @@ import tempfile
 from pathlib import Path
 
 import duckdb
+import folium
 import pydeck as pdk
 import polars as pl
 import streamlit as st
+from streamlit_folium import st_folium
 
 st.set_page_config(
     page_title="GeoLocator AI",
@@ -23,8 +25,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# Use CartoDB positron — no Mapbox token required
-_MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 DB = "geoguessr.db"
 
 
@@ -75,92 +75,66 @@ def _live_map(
     guess_lng: float,
     actual_lat: float | None = None,
     actual_lng: float | None = None,
-) -> pdk.Deck:
-    layers = []
-
-    # Blue pin — guess
-    layers.append(pdk.Layer(
-        "ScatterplotLayer",
-        data=[{"lat": guess_lat, "lng": guess_lng, "label": "Guess"}],
-        get_position="[lng, lat]",
-        get_color=[30, 120, 255, 230],
-        get_radius=80000,
-        pickable=True,
-        stroked=True,
-        line_width_min_pixels=2,
-    ))
-
+    height: int = 380,
+) -> None:
+    """Render a folium map with a blue guess marker and optional green actual marker + line."""
     if actual_lat is not None and actual_lng is not None:
-        # Green pin — actual
-        layers.append(pdk.Layer(
-            "ScatterplotLayer",
-            data=[{"lat": actual_lat, "lng": actual_lng, "label": "Actual location"}],
-            get_position="[lng, lat]",
-            get_color=[30, 200, 90, 230],
-            get_radius=80000,
-            pickable=True,
-            stroked=True,
-            line_width_min_pixels=2,
-        ))
-        # Dashed line between them
-        layers.append(pdk.Layer(
-            "LineLayer",
-            data=[{"src": [guess_lng, guess_lat], "dst": [actual_lng, actual_lat]}],
-            get_source_position="src",
-            get_target_position="dst",
-            get_color=[220, 60, 60, 200],
-            get_width=3,
-        ))
         center_lat = (guess_lat + actual_lat) / 2
         center_lng = (guess_lng + actual_lng) / 2
     else:
         center_lat, center_lng = guess_lat, guess_lng
 
-    return pdk.Deck(
-        layers=layers,
-        initial_view_state=pdk.ViewState(
-            latitude=center_lat, longitude=center_lng, zoom=2, pitch=0
-        ),
-        map_style=_MAP_STYLE,
-        tooltip={"text": "{label}"},
-    )
+    m = folium.Map(location=[center_lat, center_lng], zoom_start=2, tiles="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>')
+
+    folium.Marker(
+        location=[guess_lat, guess_lng],
+        tooltip="Guess",
+        icon=folium.Icon(color="blue", icon="crosshairs", prefix="fa"),
+    ).add_to(m)
+
+    if actual_lat is not None and actual_lng is not None:
+        folium.Marker(
+            location=[actual_lat, actual_lng],
+            tooltip="Actual location",
+            icon=folium.Icon(color="green", icon="map-marker", prefix="fa"),
+        ).add_to(m)
+        folium.PolyLine(
+            locations=[[guess_lat, guess_lng], [actual_lat, actual_lng]],
+            color="#e74c3c",
+            weight=2.5,
+            dash_array="6 4",
+            tooltip="Distance line",
+        ).add_to(m)
+
+    st_folium(m, height=height, use_container_width=True, returned_objects=[])
 
 
-def _overview_map(df: pl.DataFrame) -> pdk.Deck:
-    """Overview map: all guess locations as score-colored dots."""
-    map_df = (
-        df.filter(
-            pl.col("guess_lat").is_not_null() & pl.col("guess_lng").is_not_null()
-        )
-        .select(["round_id", "guess_lat", "guess_lng", "guessed_country", "geoguessr_score"])
-    )
+def _overview_map(df: pl.DataFrame, height: int = 320) -> None:
+    """Render a folium overview map with all guess locations colored by score."""
+    map_df = df.filter(
+        pl.col("guess_lat").is_not_null() & pl.col("guess_lng").is_not_null()
+    ).select(["round_id", "guess_lat", "guess_lng", "guessed_country", "geoguessr_score"])
 
-    records = []
+    m = folium.Map(location=[20, 0], zoom_start=2, tiles="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>')
+
     for row in map_df.iter_rows(named=True):
-        records.append({
-            "lat":     row["guess_lat"],
-            "lng":     row["guess_lng"],
-            "score":   row["geoguessr_score"] or 0,
-            "label":   f"{row['round_id']} — {row['guessed_country'] or '?'} ({row['geoguessr_score'] or '?'} pts)",
-            "color":   _score_color(row["geoguessr_score"]),
-        })
+        r, g, b, _ = _score_color(row["geoguessr_score"])
+        color_hex = f"#{r:02x}{g:02x}{b:02x}"
+        score_val = row["geoguessr_score"]
+        label = f"{row['round_id']} — {row['guessed_country'] or '?'} ({score_val or '?'} pts)"
+        folium.CircleMarker(
+            location=[row["guess_lat"], row["guess_lng"]],
+            radius=5,
+            color=color_hex,
+            fill=True,
+            fill_color=color_hex,
+            fill_opacity=0.8,
+            tooltip=label,
+        ).add_to(m)
 
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=records,
-        get_position="[lng, lat]",
-        get_color="color",
-        get_radius=80000,
-        pickable=True,
-        auto_highlight=True,
-    )
-
-    return pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(latitude=20, longitude=0, zoom=1, pitch=0),
-        map_style=_MAP_STYLE,
-        tooltip={"text": "{label}"},
-    )
+    st_folium(m, height=height, use_container_width=True, returned_objects=[])
 
 
 # ---------------------------------------------------------------------------
@@ -312,8 +286,7 @@ def tab_live() -> None:
             _score_banner(pts, dist_km)
 
         # Map — full width of right column
-        deck = _live_map(guess_lat, guess_lng, actual_lat, actual_lng)
-        st.pydeck_chart(deck, height=380)
+        _live_map(guess_lat, guess_lng, actual_lat, actual_lng, height=380)
 
     # ------------------------------------------------------------------
     # Feature expander — full width below
@@ -376,7 +349,7 @@ def tab_history() -> None:
     # Overview map — all guesses colored by score
     st.subheader("All guess locations")
     st.caption("Green = high score · Red = low score · Grey = unscored")
-    st.pydeck_chart(_overview_map(df), height=320)
+    _overview_map(df, height=320)
 
     st.divider()
 
@@ -490,16 +463,23 @@ def tab_history() -> None:
 
     with det_right:
         if row.get("guess_lat") and row.get("guess_lng"):
-            deck = _live_map(
+            _live_map(
                 row["guess_lat"], row["guess_lng"],
                 row.get("actual_lat"), row.get("actual_lng"),
+                height=440,
             )
-            st.pydeck_chart(deck, height=440)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+st.markdown(
+    "<h1 style='margin-bottom:0.1rem'>🌍 GeoLocator AI</h1>"
+    "<p style='color:#888;margin-top:0;margin-bottom:1.2rem'>"
+    "Street View geolocation powered by Claude Sonnet</p>",
+    unsafe_allow_html=True,
+)
 
 tab1, tab2 = st.tabs(["🔍  Live Analysis", "📊  History"])
 

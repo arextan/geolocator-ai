@@ -1,8 +1,21 @@
+import math
 import time
 
 from geopy.geocoders import Nominatim
 
 from config import NOMINATIM_RATE_LIMIT_SECONDS, NOMINATIM_USER_AGENT
+
+_SANITY_MAX_KM = 150  # reject geocode result if it's further than this from Claude's guess
+
+
+def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in km."""
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlng / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
 
 # Maps detected language names → plausible ISO 3166-1 alpha-2 country codes.
 # Used to reject geocode results that conflict with the detected language
@@ -132,6 +145,33 @@ def route(features: dict) -> dict | None:
                 f"(conflicts with language '{language}')"
             )
             return None
+
+        # Sanity check 1 — distance from Claude's own location guess
+        lg = features.get("location_guess", {}) or {}
+        claude_lat: float | None = lg.get("lat")
+        claude_lng: float | None = lg.get("lng")
+
+        if claude_lat is not None and claude_lng is not None:
+            dist_km = _haversine(location.latitude, location.longitude, claude_lat, claude_lng)
+            if dist_km > _SANITY_MAX_KM:
+                print(
+                    f"[router] rejected '{place_name}' → {location.latitude:.4f}, "
+                    f"{location.longitude:.4f} — {dist_km:.0f} km from Claude's guess "
+                    f"(>{_SANITY_MAX_KM} km threshold)"
+                )
+                return None
+
+            # Sanity check 2 — geocoded country vs Claude's guessed country
+            geocoded_country = (
+                location.raw.get("address", {}).get("country", "").strip().lower()
+            )
+            claude_country = (lg.get("country") or "").strip().lower()
+            if geocoded_country and claude_country and geocoded_country != claude_country:
+                print(
+                    f"[router] rejected '{place_name}' — geocoded country '{geocoded_country}' "
+                    f"!= Claude's guessed country '{claude_country}'"
+                )
+                return None
 
         print(
             f"[router] geocode path: '{place_name}' → "
