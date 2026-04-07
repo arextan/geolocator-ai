@@ -36,7 +36,7 @@ A geospatial image intelligence pipeline that extracts geographic features from 
 ## Quick start
 
 ```bash
-git clone https://github.com/yourname/geolocator-ai.git
+git clone https://github.com/arextan/geolocator-ai.git
 cd geolocator-ai
 python -m venv venv
 venv\Scripts\activate          # Windows
