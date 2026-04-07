@@ -7,7 +7,7 @@ A geospatial image intelligence pipeline that extracts geographic features from 
 **Result:** 20,740 points in live GeoGuessr gameplay (out of 25,000 max)  
 **Stack:** Python · Claude Sonnet · DuckDB · Polars · Streamlit
 
-**[Full Project Report (PDF)](docs/GeoLocator-AI Report.pdf)**
+**[Full Project Report (PDF)](docs/GeoLocator_AI_Report.pdf)**
 
 ![App Live Analysis](docs/app_live_analysis.png)
 
