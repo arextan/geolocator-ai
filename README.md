@@ -43,8 +43,9 @@ venv\Scripts\activate          # Windows
 source venv/bin/activate       # Mac/Linux
 pip install -r requirements.txt
 
-cp .env.example .env
-# Add your API keys to .env
+# Create .env file with your API keys
+echo ANTHROPIC_API_KEY=your-key-here > .env
+echo GOOGLE_MAPS_API_KEY=your-key-here >> .env  # Only needed for data collection
 
 # Test on a single image
 python evaluate.py path/to/screenshot.png
