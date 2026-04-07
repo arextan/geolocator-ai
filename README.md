@@ -1,9 +1,35 @@
 # geolocator-ai
 
-Multi-source image intelligence pipeline that extracts geographic features from Street View imagery using Claude's vision API, performs direct location inference, and stores structured results for analytical querying and iterative prompt refinement.
+Evaluating and improving VLM reasoning reliability in real-world geospatial inference.
 
-**Target:** 20,000+ per 5-round GeoGuessr game (out of 25,000 max)  
+A geospatial image intelligence pipeline that extracts geographic features from Street View imagery using Claude Sonnet's vision API, performs direct location inference, and stores structured results for analytical querying and iterative prompt refinement.
+
+**Result:** 20,740 points in live GeoGuessr gameplay (out of 25,000 max)  
 **Stack:** Python · Claude Sonnet · DuckDB · Polars · Streamlit
+
+**[Full Project Report (PDF)](docs/geolocator_ai_report.pdf)**
+
+![App Live Analysis](docs/app_live_analysis.png)
+
+---
+
+## Results
+
+| Version | Avg Score | Median | Details |
+|---------|-----------|--------|---------|
+| V1 Bayesian pipeline | 1,025 | 350 | 43% wrong continent (feature decomposition degraded inference) |
+| V2 Direct inference (607 rounds) | 3,490 | 4,052 | 51% of rounds over 4,000 pts |
+| Live GeoGuessr Game 1 | 19,379 | — | 5 rounds: 4,057 · 4,460 · 4,842 · 1,218 · 4,802 |
+| Live GeoGuessr Game 2 | **20,740** | — | 5 rounds: 2,583 · 4,964 · 4,992 · 3,210 · 4,991 |
+
+### Key findings
+
+- **VLMs should be guided, not decomposed.** Bayesian feature scoring degraded Claude's inference by 240%. Direct inference outperforms structured scoring.
+- **Confidence is calibrated.** Claude's self-assessed confidence is linearly predictive of actual accuracy (745 avg at low confidence → 4,893 at high).
+- **Geographic bias exists.** Claude systematically guesses the American Southwest for arid landscapes regardless of hemisphere. South Africa is misidentified as USA 62% of the time.
+- **Prompt placement matters.** Instructions placed as post-guess validation checks are more effective than the same instructions placed as background knowledge.
+
+![Confidence Calibration](docs/confidence_calibration.png)
 
 ---
 
@@ -13,23 +39,15 @@ Multi-source image intelligence pipeline that extracts geographic features from 
 git clone https://github.com/yourname/geolocator-ai.git
 cd geolocator-ai
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # Mac/Linux
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env with your API keys
+# Add your API keys to .env
 
 # Test on a single image
 python evaluate.py path/to/screenshot.png
-
-# Collect labeled images
-python collect.py --locations 500 --output data/images
-
-# Run full pipeline
-python main.py --input data/images
-
-# Analyze results
-python analyze.py
 
 # Launch the app
 streamlit run app.py
@@ -39,36 +57,12 @@ streamlit run app.py
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_MAPS_API_KEY=AIza...
+GOOGLE_MAPS_API_KEY=AIza...     # Only needed for data collection
 ```
 
 ---
 
-## What this does
-
-Takes a Street View image and answers "where in the world is this?" through a structured pipeline:
-
-1. **Extract + Infer** — Claude Sonnet analyzes the image in a single call, returning both ~20 structured geographic features AND a direct location guess with coordinates and reasoning
-2. **Route** — If a geocodable place name was found in the image, Nominatim geocoding overrides Claude's guess for higher precision
-3. **Store** — Log everything to DuckDB: extracted features, guessed city/country/coordinates, reasoning, actual coordinates, score
-4. **Analyze** — Query DuckDB to identify systematic failure patterns and which features predict accuracy
-5. **Refine** — Encode analytical findings back into the extraction prompt as corrective instructions
-6. **Display** — Streamlit app with map, reasoning panel, and historical analysis
-
-### The refinement loop
-
-The pipeline's core methodology is iterative prompt refinement based on empirical error analysis:
-
-```
-Run images → analyze errors in DuckDB → identify failure patterns
-→ add corrective instructions to prompt → re-run → measure improvement
-```
-
-Each iteration makes Claude's geolocation inference more accurate and consistent by directing its attention to the features that empirically matter most.
-
----
-
-## Architecture
+## How it works
 
 ```
 Screenshot → extractor.py (features + location guess in ONE Claude call)
@@ -79,30 +73,83 @@ Screenshot → extractor.py (features + location guess in ONE Claude call)
            → Streamlit (interactive display)
 ```
 
+A single Claude Sonnet API call analyzes the image and returns:
+- **20 structured geographic features** (script, language, driving side, biome, architecture, road markings, etc.) — stored for analysis
+- **A direct location guess** with city, country, coordinates, reasoning, and confidence — used for scoring
+
+If Claude reads a specific place name with high confidence, a Nominatim geocode override provides more precise coordinates. A 100km sanity check prevents mismatched geocodes.
+
+The pipeline implements a confidence-based decision system. When Claude's self-assessed confidence exceeds 0.7, the direct inference coordinates are accepted with high trust. When a geocodable place name is detected with language confidence above 0.8, the geocode path overrides with verified coordinates. For low-confidence rounds, the system's analytical layer flags these for pattern analysis, feeding the iterative prompt refinement loop.
+
+The 20 features are organized into two passes. Pass 1 covers deterministic signals: script type, language, readable text, place names, route numbers, plate format, driving side, speed sign format, domain extensions, and currency symbols. Pass 2 covers probabilistic signals: biome, vegetation species, sky condition, terrain, soil color, architecture style, pole type, road surface, road markings, and infrastructure quality. These were selected from a reference taxonomy of 127 geographic indicators, filtered to the subset Claude can reliably extract without hallucination.
+
 ---
 
 ## App
 
-Streamlit interface for running the pipeline interactively and reviewing results.
+The Streamlit interface provides two views:
 
-### Live analysis view
+### Live Analysis
 
-Upload a screenshot or paste from clipboard. The app runs the full pipeline and displays:
+Upload a GeoGuessr screenshot (or use the built-in screenshot tool with 5-second delay) and the pipeline returns a location guess with map, reasoning, and extracted features.
 
-- **Original image** — The uploaded screenshot
-- **Result card** — Predicted city/country, coordinates, confidence
-- **Map** — Guess pin (blue), actual pin if known (green), distance line
-- **Reasoning panel** — Claude's reasoning, extracted features, which features drove the decision
-- **Score** — GeoGuessr points if actual location is provided
+![App Live Analysis](docs/app_live_analysis.png)
 
-### Historical analysis view
+**Features:**
+- Drag-and-drop image upload or automatic screenshot capture
+- Interactive map with guess pin (blue) and actual pin (green) if provided
+- Claude's reasoning and confidence score
+- Extracted features in collapsible panel
+- Optional actual coordinates for scoring
 
-Browse and query all processed rounds from DuckDB:
+### History
 
-- Filter by score range, country, path taken
-- Sort by worst rounds to investigate failures
-- View feature importance and confusion patterns
-- Drill into any round to see its full pipeline trace
+Browse all processed rounds from DuckDB with filtering and sorting.
+
+![App History](docs/app_history.png)
+
+**Features:**
+- Scatter map of all guess locations colored by score
+- Sortable table with round details
+- Filter by score range, confidence, country
+- Aggregate statistics (avg score, median, rounds over 4,000)
+
+---
+
+## The refinement loop
+
+The pipeline's core methodology is iterative prompt refinement based on empirical error analysis:
+
+```
+Run images → analyze errors in DuckDB → identify failure patterns
+→ add corrective instructions to prompt → re-run → measure improvement
+```
+
+### What the analysis revealed
+
+Key patterns discovered through structured SQL analysis of 607 rounds:
+
+- **South Africa → USA confusion (62%):** Dry terrain with sparse scrubland defaults to American Southwest. Corrected with driving-side checks and South African road marking rules (yellow edge + white center).
+- **Vietnam → Thailand confusion (58%):** Corrected with diacritics-based script discrimination.
+- **Italy → Portugal confusion:** Claude correctly extracted "no center line" road markings but didn't apply the rule during inference. Fixed by restructuring the prompt to include post-guess validation checks.
+- **VLM geographic bias:** Claude demonstrates systematic bias toward guessing the United States for arid landscapes regardless of hemisphere, which is a pattern only visible through aggregate analysis.
+
+---
+
+## Data collection
+
+607 locations collected via Google Street View Static API:
+- 4 headings per location (0°, 90°, 180°, 270°), ~2,400 total images
+- Stratified across 17 regions (China excluded due to no Street View coverage)
+- Tiered snap radius: dense regions 1km, medium 10km, sparse 50km
+- 84% of images have no readable text (deliberately rural-heavy)
+
+```bash
+python collect.py --locations 500 --output data/images --dry-run  # Preview distribution
+python collect.py --locations 500 --output data/images            # Download images
+python main.py --input data/images                                # Process through pipeline
+python analysis/analyze.py                                        # Analyze results
+```
 
 ---
 
@@ -113,97 +160,79 @@ geolocator-ai/
 ├── README.md
 ├── requirements.txt
 ├── .env.example
+├── config.py                   # API keys, thresholds
 │
-│   App
-├── app.py                  # Streamlit interface
+│   Entry points
+├── app.py                      # Streamlit interface with screenshot tool
+├── main.py                     # Batch orchestration — idempotent, crash-safe
+├── evaluate.py                 # Single-image CLI tool
+├── collect.py                  # Street View API image scraper
 │
-│   Pipeline (core)
-├── main.py                 # Batch orchestration — resumes on failure
-├── config.py               # API keys, thresholds
-├── evaluate.py             # Single-image CLI debug tool
+│   Pipeline
+├── pipeline/
+│   ├── __init__.py
+│   ├── extractor.py            # Claude API → features + location guess
+│   ├── extraction_prompt.py    # Combined extraction + inference prompt
+│   ├── router.py               # Geocode override with 100km sanity check
+│   ├── geo.py                  # Coordinate selection
+│   ├── scoring.py              # Haversine distance + GeoGuessr points
+│   ├── scorer.py               # Bayesian scoring (analytical only)
+│   ├── feature_region_map.py   # 127-feature knowledge base
+│   └── centroids.json          # Coverage-weighted centroids
 │
-│   Pipeline modules
-├── extractor.py            # Claude API → features + location guess
-├── extraction_prompt.py    # Combined extraction + inference prompt
-├── router.py               # Geocode override when place name found
-├── geo.py                  # Coordinate selection
-├── scoring.py              # Haversine distance + GeoGuessr points
+│   Analysis
+├── analysis/
+│   ├── __init__.py
+│   ├── analyze.py              # Feature importance, confusion matrix
+│   ├── calibrate.py            # Threshold analysis
+│   └── sanity_check.py         # Quick DB diagnostics
 │
-│   Analytical (runs in background / post-hoc)
-├── scorer.py               # Bayesian scoring — analytical purposes only
-├── feature_region_map.py   # 127-feature knowledge base (reference)
-├── centroids.json          # Coverage-weighted centroids (reference)
+│   Data & storage
+├── data/images/                # Collected images + sidecar JSONs
+├── geoguessr.db                # DuckDB storage
 │
-│   Post-hoc
-├── calibrate.py            # Prompt refinement analysis
-├── analyze.py              # Feature importance, confusion matrix
-├── collect.py              # Street View API image scraper
-├── sanity_check.py         # Quick DB diagnostics
-│
-├── data/
-│   └── images/
-│
+│   Documentation
 └── docs/
+    ├── geolocator_ai_report.pdf
+    ├── score_distribution.png
+    ├── confidence_calibration.png
+    ├── worst_rounds.csv
+    ├── app_live_analysis.png
+    ├── app_history.png
     ├── pipeline.md
     ├── data_model.md
-    ├── feature_reference.md
-    └── findings.md
+    └── feature_reference.md
 ```
-
----
-
-## Data model
-
-Each round is one row in DuckDB.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `round_id` | VARCHAR | Unique identifier |
-| `script` | VARCHAR | Detected writing system |
-| `language` | VARCHAR | Detected language |
-| `place_name` | VARCHAR | Geocodable text or null |
-| `guessed_city` | VARCHAR | Claude's city-level guess |
-| `guessed_country` | VARCHAR | Claude's country guess |
-| `guess_reasoning` | VARCHAR | Claude's one-sentence reasoning |
-| `guess_confidence` | FLOAT | Claude's self-assessed confidence |
-| `path_taken` | VARCHAR | `claude_direct` or `geocode` |
-| `features_used` | VARCHAR[] | Which features drove the guess |
-| `guess_lat/lng` | DOUBLE | Predicted coordinates |
-| `actual_lat/lng` | DOUBLE | True coordinates (optional) |
-| `distance_km` | FLOAT | Haversine error |
-| `geoguessr_score` | INTEGER | 0–5,000 points |
-| `raw_response` | TEXT | Full Claude response for debugging |
-
-Full schema: [`docs/data_model.md`](docs/data_model.md)
 
 ---
 
 ## Example queries
 
 ```sql
--- Failure analysis: where does Claude get it wrong?
+-- Where does Claude fail?
 SELECT round_id, guessed_country, distance_km, guess_reasoning
 FROM rounds WHERE geoguessr_score < 500
 ORDER BY distance_km DESC;
 
--- Feature correlation with accuracy
+-- Feature effectiveness
 SELECT unnest(features_used) AS feature,
        COUNT(*) AS times_used,
        ROUND(AVG(geoguessr_score)) AS avg_score
 FROM rounds GROUP BY feature ORDER BY avg_score DESC;
 
--- Country-level accuracy
+-- Country accuracy
 SELECT guessed_country, COUNT(*) AS rounds,
-       ROUND(AVG(geoguessr_score)) AS avg_score,
-       ROUND(AVG(distance_km)) AS avg_error_km
+       ROUND(AVG(geoguessr_score)) AS avg_score
 FROM rounds GROUP BY guessed_country ORDER BY avg_score DESC;
 
--- Text detection impact
+-- Confidence calibration check
 SELECT 
-    CASE WHEN language IS NOT NULL THEN 'text_found' ELSE 'no_text' END AS text_status,
+    CASE WHEN guess_confidence >= 0.7 THEN 'high'
+         WHEN guess_confidence >= 0.4 THEN 'medium'
+         ELSE 'low' END AS tier,
     COUNT(*) AS rounds,
     ROUND(AVG(geoguessr_score)) AS avg_score
-FROM rounds GROUP BY text_status;
+FROM rounds GROUP BY tier;
 
 -- High confidence failures (prompt refinement targets)
 SELECT round_id, guess_confidence, geoguessr_score, 
@@ -213,40 +242,62 @@ FROM rounds WHERE guess_confidence > 0.7 AND geoguessr_score < 1000;
 
 ---
 
-## Key design decisions
+## The Bayesian experiment
 
-**Single-call extraction + inference** — One Claude API call returns both structured features (for analysis) and a direct location guess (for scoring). Features provide the audit trail; inference provides the accuracy.
+The initial architecture extracted features, scored them against Bayesian likelihood tables for 18 world regions, and resolved the top region to a centroid coordinate. This approach averaged 1,025 points with 43% of rounds guessing the wrong continent.
 
-**Geocoding override** — When Claude reads a specific place name with high language confidence, Nominatim geocoding overrides Claude's coordinate guess for higher precision.
+**Why it failed:** Decomposing Claude's visual understanding into discrete categorical features and reassembling them via likelihood multiplication acted as lossy compression. Claude correctly identified features but the scoring layer combined them less effectively than Claude's own reasoning.
 
-**Iterative prompt refinement** — Error analysis identifies systematic failure patterns (e.g., "confuses rural France with Russia 40% of the time"). Corrective instructions are added to the prompt ("hedgerows and narrow lanes indicate Western Europe, not Russia"). Each iteration measurably improves accuracy.
+**What replaced it:** A single Claude call that extracts features AND infers the location directly. Same features stored for analysis, but the guess comes from Claude's inference, not from Bayesian math. This improved average score by 240%.
 
-**Features for analysis, not scoring** — The structured features aren't used to compute the location guess. They're stored alongside the guess so you can analyze which features correlate with accuracy and which visual cues Claude relies on.
-
-**Bayesian scorer as analytical tool** — The original Bayesian scoring approach was tested and found to degrade accuracy vs direct inference. It's kept running in the background to produce feature importance rankings and confusion matrices, but doesn't influence the actual guess.
+The Bayesian scorer remains in the codebase as an analytical tool for producing feature importance rankings and confusion matrices.
 
 ---
 
-## Performance history
+## Performance details
 
-| Version | Avg score | Median | Notes |
-|---------|-----------|--------|-------|
-| Manual test (5 rounds) | ~3,260 | — | Direct Claude analysis in chat |
-| V1 Bayesian pipeline | 1,025 | 350 | 43% wrong continent, feature decomposition degraded inference |
-| V2 Direct inference | *pending* | — | Expected 2,800–3,500+ based on manual test |
+### Training dataset (607 rural images)
+- Average: 3,490 · Median: 4,052
+- 51% of rounds score above 4,000
+- 9% of rounds score below 500
+- Geocode path (10 rounds): 4,734 avg
+- Claude direct path (593 rounds): 3,471 avg
+- Text detection rate: 16%
 
-### Key finding
+### Confidence buckets
+| Confidence | Rounds | Avg Score |
+|------------|--------|-----------|
+| High (≥0.7) | 99 | 4,172 |
+| Medium (0.4–0.7) | 366 | 3,518 |
+| Low (<0.4) | 138 | 2,929 |
 
-Decomposing Claude's visual understanding into discrete features and reassembling them via Bayesian likelihood multiplication performs significantly worse than letting Claude infer the location directly. The pipeline's value is in structuring the output for analysis and iteratively refining the prompt, not in replacing Claude's inference with manual scoring logic.
+### Top confusion pairs
+| Actual | Guessed As | Error Rate |
+|--------|-----------|------------|
+| South Africa | USA/Mexico | 62% |
+| Vietnam | Thailand | 58% |
+| Canada | USA | 72% |
+| Sweden | Finland | 50% |
+
+---
+
+## Real-world applications
+
+- **OSINT and defense analysis**: Determining the geographic origin of images and videos with structured evidence trails and measurable confidence levels
+- **Fraud detection**: Verifying that seller locations and listing photos match claimed geographic origins by checking for visual inconsistencies (e.g., wrong driving side, mismatched road markings)
+- **Content moderation**: Detecting misrepresented locations in user-submitted imagery
+- **Disaster response**: Rapid geolocation of damage imagery from social media or field reports, where the pipeline's ability to process text-free imagery (84% of training data) is directly relevant
 
 ---
 
 ## Known limitations
 
-- **Replica environments** (theme parks, cultural villages) produce geographically misleading features. No single-frame fix.
-- **Rural images without text** (84% of collected dataset) rely entirely on environmental inference — accuracy ceiling is lower than urban images with signs.
-- **Nominatim rate limit** (1 req/sec). Fine for batch, needs caching for live use.
-- **607 training images** — directional results, not definitive. Expandable with additional collection runs.
+- **Replica environments** (theme parks, cultural villages) present foreign architecture indistinguishable from the real country in a single frame
+- **Rural accuracy ceiling**: 84% of training images have no text; eucalyptus plantations on red soil look identical in Thailand and Brazil
+- **VLM geographic bias**: Claude defaults to the American Southwest for arid landscapes regardless of hemisphere
+- **Prompt engineering ceiling**: prompt refinement yielded +32 pts on the training dataset; remaining failures are genuinely ambiguous locations
+- **Countries without Street View** (China, North Korea): Claude can infer these from training knowledge but accuracy is unmeasured
+- **607 samples**: sufficient for identifying patterns, not for robust per-country statistics
 
 ---
 
@@ -255,14 +306,15 @@ Decomposing Claude's visual understanding into discrete features and reassemblin
 | Layer | Tool | Why |
 |-------|------|-----|
 | Runtime | Python 3.11+ | Standard for analytics |
-| Vision + Inference | Claude Sonnet | Best VLM for structured extraction + geolocation |
+| Vision + Inference | Claude Sonnet | Structured extraction + geolocation in one call |
 | Geocoding | geopy + Nominatim | Free, sufficient volume |
-| Spatial | GeoPandas + Shapely | Point-in-polygon, centroid ops |
+| Spatial | GeoPandas + Shapely | Point-in-polygon operations |
 | Dataframes | Polars | Faster than pandas, cleaner API |
-| Storage | DuckDB | Analytical queries, zero infrastructure |
-| App | Streamlit + pydeck | Fast analytical UI, built-in maps |
+| Storage | DuckDB | Analytical SQL queries, zero infrastructure |
+| App | Streamlit + Folium | Interactive UI with maps |
 | HTTP | httpx | Async image collection |
 | Analysis | scikit-learn, matplotlib, seaborn | Feature importance + charts |
+| Image Processing | Pillow | Auto-resize for API limits |
 
 ---
 
