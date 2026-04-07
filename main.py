@@ -30,11 +30,11 @@ from pathlib import Path
 import duckdb
 import polars as pl
 
-from extractor import extract
-from geo import resolve
-from router import route
-from scorer import score as bayesian_score
-from scoring import geoguessr_score, haversine
+from pipeline.extractor import extract
+from pipeline.geo import resolve
+from pipeline.router import route
+from pipeline.scorer import score as bayesian_score
+from pipeline.scoring import geoguessr_score, haversine
 
 _IMAGE_EXTENSIONS: frozenset[str] = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
 _DB_DEFAULT = "geoguessr.db"

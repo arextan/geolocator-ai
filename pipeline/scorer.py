@@ -16,7 +16,7 @@ Pipeline:
 import math
 
 from config import HIGH_CONFIDENCE_THRESHOLD, MEDIUM_CONFIDENCE_THRESHOLD
-from feature_region_map import (
+from .feature_region_map import (
     BIOME_HEDGE_CENTROIDS,
     DEFAULT_LIKELIHOOD,
     FEATURE_REGION_MAP,

@@ -54,7 +54,7 @@ def _print_geo(geo_result: dict) -> None:
 
 
 def _print_score(guess_lat: float, guess_lng: float, actual_lat: float, actual_lng: float) -> None:
-    from scoring import haversine, geoguessr_score
+    from pipeline.scoring import haversine, geoguessr_score
     distance_km = haversine(guess_lat, guess_lng, actual_lat, actual_lng)
     pts = geoguessr_score(distance_km)
     print("\n=== RESULT ===")
@@ -81,7 +81,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Step 1 — Extraction (features + location guess in one call)
     # ------------------------------------------------------------------
-    from extractor import extract
+    from pipeline.extractor import extract
     features, _raw = extract([args.image])
     _print_extraction(features)
     _print_location_guess(features.get("location_guess", {}))
@@ -89,7 +89,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Step 2 — Router (geocode overrides Claude's guess when place found)
     # ------------------------------------------------------------------
-    from router import route
+    from pipeline.router import route
     router_result = route(features)
 
     if router_result is not None:
@@ -104,14 +104,14 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Step 3 — Scorer (analytical only — not used for the final guess)
     # ------------------------------------------------------------------
-    from scorer import score as bayesian_score
+    from pipeline.scorer import score as bayesian_score
     scorer_result = bayesian_score(features)
     _print_scorer(scorer_result)
 
     # ------------------------------------------------------------------
     # Step 4 — Coordinate resolution
     # ------------------------------------------------------------------
-    from geo import resolve
+    from pipeline.geo import resolve
     geo_result = resolve(features, router_result)
     _print_geo(geo_result)
 

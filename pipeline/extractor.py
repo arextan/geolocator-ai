@@ -8,7 +8,7 @@ import anthropic
 from PIL import Image
 
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
-from extraction_prompt import EXTRACTION_PROMPT
+from .extraction_prompt import EXTRACTION_PROMPT
 
 _MAX_BYTES = 4 * 1024 * 1024  # 4 MB
 

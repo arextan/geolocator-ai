@@ -11,10 +11,10 @@ With --rescore, reconstructs the features dict from stored columns and re-runs
 scorer.score() — required to capture the benefit of new normalization rules.
 
 Usage:
-    python calibrate.py
-    python calibrate.py --rescore
-    python calibrate.py --db geoguessr.db
-    python calibrate.py --high-range 0.4 0.8 --medium-range 0.15 0.5 --step 0.05
+    python analysis/calibrate.py
+    python analysis/calibrate.py --rescore
+    python analysis/calibrate.py --db geoguessr.db
+    python analysis/calibrate.py --high-range 0.4 0.8 --medium-range 0.15 0.5 --step 0.05
 """
 
 import argparse
@@ -25,13 +25,13 @@ from pathlib import Path
 import duckdb
 import polars as pl
 
-from feature_region_map import FEATURE_REGION_MAP
-from scoring import geoguessr_score, haversine
+from pipeline.feature_region_map import FEATURE_REGION_MAP
+from pipeline.scoring import geoguessr_score, haversine
 
 _DB_DEFAULT = "geoguessr.db"
 
-# Centroid loading — mirrors geo.py
-_CENTROIDS_PATH = Path(__file__).parent / "centroids.json"
+# centroids.json lives in pipeline/
+_CENTROIDS_PATH = Path(__file__).parent.parent / "pipeline" / "centroids.json"
 try:
     _CENTROIDS: dict = json.loads(_CENTROIDS_PATH.read_text())
 except FileNotFoundError:
@@ -224,7 +224,7 @@ def main() -> None:
     # --rescore: re-run scorer.score() on stored features to pick up new
     # normalization rules (architecture, road_markings, etc.)
     if args.rescore:
-        from scorer import score as bayesian_score
+        from pipeline.scorer import score as bayesian_score
         print("[calibrate] re-scoring all rounds with current scorer...")
         for row in rows:
             if row["path_taken"] == "geocode":

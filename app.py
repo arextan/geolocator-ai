@@ -35,9 +35,9 @@ DB = "geoguessr.db"
 # ---------------------------------------------------------------------------
 
 def _run_pipeline(image_path: str) -> dict:
-    from extractor import extract
-    from router import route
-    from geo import resolve
+    from pipeline.extractor import extract
+    from pipeline.router import route
+    from pipeline.geo import resolve
 
     features, raw = extract([image_path])
     router_result = route(features)
@@ -337,7 +337,7 @@ def tab_live() -> None:
         # Score banner (if actual provided)
         actual_lat = actual_lng = None
         if has_actual and (actual_lat_val != 0.0 or actual_lng_val != 0.0):
-            from scoring import haversine, geoguessr_score
+            from pipeline.scoring import haversine, geoguessr_score
             actual_lat = actual_lat_val
             actual_lng = actual_lng_val
             dist_km = haversine(guess_lat, guess_lng, actual_lat, actual_lng)
