@@ -208,6 +208,6 @@ __marimo__/
 
 # Project specific
 CLAUDE.md
-extraction_prompt.py
 geoguessr.db
 data/images/
+geolocator_ai_report.docx
